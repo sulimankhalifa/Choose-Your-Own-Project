@@ -1,0 +1,287 @@
+---
+title: "Machine Learning Model for Mall Customers"
+author: "Suliman Alkhalifa"
+date: "15 April 2019"
+output:
+  pdf_document: default
+---
+
+## 1. Introcution
+
+This report includes the structure, analysis and techniques used to present my 'Choose Your Own Project' as part of the capstone course.
+
+
+### 1.1 Dataset
+
+For this project, I will be using the mall customer segmentation data which is provided publicly from Kaggle.com. This includes data for 200 customers collecting their information like gender, age, annual income and spending score.
+
+
+### 1.2 Project Overview
+
+For this project, I will build a machine learning model that predicts the gender of the customers who visit the mall. This can help businesses to modify their production strategies based on majority of males or females visiting their stores. I will use different models and compare their results to select the best one.
+
+
+## 2. Prepare Data
+
+This section includes libraries used, downloaded dataset and creating validation set.
+
+
+### 2.1 Load Libraries
+
+The libraries I will use are the following:
+
+```{r libs, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(caret)
+library(e1071)
+library(randomForest)
+library(RCurl)
+```
+
+
+### 2.2 Load dataset
+
+I downloaded the dataset from kaggle.com and saved it to my Github repository. To download it from there, I will use the following code:
+
+```{r data_download, echo=TRUE}
+dl <- getURL(
+  "https://raw.githubusercontent.com/sulimankhalifa/Choose-Your-Own-Project/master/Mall_Customers.csv")
+```
+
+I will read the dataset into R using the following code:
+
+```{r read_data, echo=TRUE}
+my_dataset <- read.csv(textConnection(dl))
+```
+
+
+I will change the columns' names to simplify them:
+
+```{r col, echo=TRUE}
+colnames(my_dataset) <- c("customerID", "gender", "age", "annual_income", "spending_score")
+```
+
+
+### 2.3 Create validation set 
+
+I will split the dataset into 80% to use in the training set and 20% to use in the testing set:
+
+```{r validation, echo=TRUE}
+set.seed(1)
+test_index <- createDataPartition(my_dataset$gender, p=0.80, list = FALSE)
+test_set <- my_dataset[-test_index, ]
+train_set <- my_dataset[test_index, ]
+```
+
+Training set has 161 objects while testing set has 39 objects.
+
+## 3. Explore Data
+
+This section includes dimensions of our data, types of attributes and summary.
+
+
+### 3.1 Dimensions of Dataset
+
+We can look at how many rows and columns in our dataset:
+
+```{r dim, echo=TRUE}
+dim(train_set)
+```
+
+We have 161 rows and 5 columns in our data.
+
+
+### 3.2 Types of Attributes
+
+To know more about our dataset, we can look at the class of each attribute:
+
+```{r class, echo=TRUE}
+sapply(train_set, class)
+```
+
+All columns have integer values except for gender which is a factor.
+
+
+### 3.3 Peek at the Dataset
+
+We can take a peek at the first 6 rows of dataset:
+
+```{r head, echo=TRUE}
+head(train_set)
+```
+
+
+### 3.4 Class Distribution
+
+Now, we will look at the percentage of gender:
+
+```{r perc, echo=TRUE}
+percentage <- prop.table(table(train_set$gender)) * 100
+cbind(freq = table(train_set$gender), percentage = percentage)
+```
+
+We have around 56% females and 44% males.
+
+
+### 3.5 Statistical Summary
+
+Finally, we can look at the summary of our dataset:
+
+```{r summ, echo=TRUE}
+summary(train_set)
+```
+
+
+## 4. Visualize Dataset
+
+In this section, we will use different plots/graphs to visualize our dataset.
+
+
+### 4.1 Distribution of Gender
+
+We can see that there are more females visiting the mall than males.
+
+```{r gender_dist, echo=TRUE}
+plot(train_set$gender)
+```
+
+
+### 4.2 Distribution of Age
+
+Majority of customers are less than 50 years-old. Top customers are between 30 and 40 years-old.
+
+```{r age_dist, echo=TRUE}
+histogram(train_set$age)
+```
+
+
+### 4.3 Distribution of Annual Income
+
+Most customers who visit the mall have annual income of $50,000 to $100,000.
+ 
+```{r income_dist, echo=TRUE}
+qplot(train_set$annual_income, bins = 30, col = "grey", 
+      main = "Annual Income Distribution", xlab = "Income")
+```
+
+
+### 4.4 Spending Score Visual
+
+The average spending score is about 50. Maximum spending score is 98 and minimum is 1. Range of spending score is between 40 and 70.
+
+```{r spend_boxplot, echo=TRUE}
+boxplot(as.numeric(train_set$spending_score), main = "Spending Score", col = "light blue")
+```
+
+
+### 4.5 Top Spending Customers
+
+This shows a list of top spending customers from the dataset.
+
+```{r top_spend, echo=TRUE}
+train_set %>% group_by(customerID) %>%
+  summarize(spending_score) %>%
+  arrange(desc(spending_score))
+```
+
+
+## 5. Evaluate some Algorithms
+
+In this section, we will create some models and select the best results.
+
+
+### 5.1 Test Harness
+
+We will 10-fold crossvalidation to estimate accuracy. This will split our dataset into 10 parts, 9 in the training set and 1 in the testing set.
+
+```{r fold, echo=TRUE}
+control <- trainControl(method = "cv", number = 10)
+metric <- "Accuracy"
+```
+
+We are using metric "Accuracy" to evaluate our models and select the best one.
+
+
+### 5.2 Build Models
+
+We will evaluate 4 models:
+
+- Linear Discriminant Analysis (LDA)
+- k-Nearest Neighbors (kNN)
+- Random Forest (RF)
+- Classifaction and Regression Trees (CART)
+
+This is a good mixture of a simple linear (LDA), nonlinear (CART, kNN) and complex nonlinear (RF) models.
+
+We reset the seed number for each model to ensure the evaluation is performed using the same dataset.
+
+
+#### 5.2.1 Linear Discriminant Analysis (LDA)
+
+```{r lda, echo=TRUE}
+set.seed(7)
+fit.lda <- train(gender~., data = train_set, method = "lda", metric = metric, trControl = control)
+```
+
+
+#### 5.2.2 k-Nearest Neighbors (kNN)
+
+```{r knn, echo=TRUE}
+set.seed(7)
+fit.knn <- train(gender~., data = train_set, method = "knn", metric = metric, trControl = control)
+```
+
+
+#### 5.2.3 Random Forest (RF)
+
+```{r rf, echo=TRUE}
+set.seed(7)
+fit.rf <- train(gender~., data = train_set, method = "rf", metric = metric, trControl = control)
+```
+
+
+#### 5.2.4 Classifaction and Regression Trees (CART)
+
+```{r rpart, echo=TRUE}
+set.seed(7)
+fit.cart <- train(gender~., data = train_set, method = "rpart", metric = metric, trControl = control)
+```
+
+
+### 5.3 Select Best Model
+
+After we have used our 4 models, we can now look at the results using the following code:
+
+```{r model_result, echo=TRUE}
+results <- resamples(list(lda = fit.lda, knn = fit.knn, rf = fit.rf, cart = fit.cart))
+summary(results)
+```
+
+We can see the accuracy for each model and other metrics like Kappa.
+
+I will create a plot of the results as follow:
+
+```{r model_plot, echo=TRUE}
+dotplot(results)
+```
+
+We can see the most accurate model (i.e. LDA) from this plot. Although random forest model (RF) has very close result.
+
+
+## 6. Make Predictions
+
+As the LDA model has the highest accuracy, we want to test that using our testing (validation) set. We will also use a summary of our predictions using confusionMatrix function.
+
+```{r predict, echo=TRUE}
+predictions <- predict(fit.lda , test_set)
+confusionMatrix(predictions, test_set$gender)
+```
+
+We can see that our accuracy is about 43% since this was a small testing set. 
+
+
+## 7. Conclusion
+
+Using machine learning in marketing segmentation is quite popular and critical these days. Businesses are constantly trying to identify success factors to make more profits. The results from the models I used to predict the gender of customers showed different accuracy measures. The best model was the LDA where accuracy is 56% but this is low due to small set of data. As we collect more data and apply the models again we might see improvements.
+
